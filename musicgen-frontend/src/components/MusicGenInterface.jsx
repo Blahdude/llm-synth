@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Loader2, Music2, User, LogOut, History, Trash2 } from 'lucide-react';
+import { Loader2, Music2, User, LogOut, History, Trash2, Menu, Home, Settings } from 'lucide-react';
 
 const MusicGenInterface = () => {
   // User state
@@ -18,6 +18,12 @@ const MusicGenInterface = () => {
   // Generations history
   const [generations, setGenerations] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
+
+  // Add this new state for dropdown
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+
+  // Add state for mobile sidebar toggle
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   // Load user data from localStorage on startup
   useEffect(() => {
@@ -162,67 +168,76 @@ const MusicGenInterface = () => {
 
 return (
     <div className="bg-[#2C3E50]">
-      <header className="fixed top-0 left-0 w-full flex items-center justify-between bg-[#2C3E50] p-4">
-        {/* Left Section: Icon */}
-        <div className="bg-white/10 p-2 rounded-lg">
-          <Music2 className="h-5 w-5 text-[#F2E6D8]" />
-        </div>
+      {/* Mobile sidebar toggle button */}
+      <button
+        onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+        className="fixed top-4 left-4 inline-flex items-center p-2 text-sm text-[#F2E6D8] rounded-lg sm:hidden hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/10"
+      >
+        <span className="sr-only">Open sidebar</span>
+        <Menu className="w-6 h-6" />
+      </button>
 
-        {/* Right Section: Controls */}
-        <div className="flex items-center gap-4">
-          {/* User Info */}
-          <div className="flex items-center gap-2 text-white/80">
-            <User className="h-4 w-4" />
-            {currentUser.username}
+      {/* Sidebar */}
+      <aside
+        className={`fixed top-0 left-0 z-40 w-64 h-screen transition-transform ${
+          isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        } sm:translate-x-0`}
+        aria-label="Sidebar"
+      >
+        <div className="h-full px-3 py-4 overflow-y-auto bg-[#1a2733]">
+          <div className="flex items-center mb-5 ps-2">
+            <Music2 className="h-6 w-6 text-[#F2E6D8]" />
+            <span className="ms-3 text-xl font-semibold text-[#F2E6D8]">LLM Synth</span>
           </div>
+          
+          <ul className="space-y-2 font-medium">
+            <li>
+              <a href="#" className="flex items-center p-2 text-[#F2E6D8] rounded-lg hover:bg-white/10 group">
+                <Home className="w-5 h-5" />
+                <span className="ms-3">Home</span>
+              </a>
+            </li>
+            <li>
+              <a href="#" className="flex items-center p-2 text-[#F2E6D8] rounded-lg hover:bg-white/10 group">
+                <Music2 className="w-5 h-5" />
+                <span className="ms-3">Generate Music</span>
+              </a>
+            </li>
+            <li>
+              <a href="#" className="flex items-center p-2 text-[#F2E6D8] rounded-lg hover:bg-white/10 group">
+                <History className="w-5 h-5" />
+                <span className="ms-3">History</span>
+              </a>
+            </li>
+            <li>
+              <a href="#" className="flex items-center p-2 text-[#F2E6D8] rounded-lg hover:bg-white/10 group">
+                <Settings className="w-5 h-5" />
+                <span className="ms-3">Settings</span>
+              </a>
+            </li>
+          </ul>
 
-          {/* Logout Button */}
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-2 bg-white/10 text-[#F2E6D8] px-3 py-1 rounded-md hover:bg-[#2C3E50] transition"
-          >
-            <LogOut className="h-5 w-5" />
-            Logout
-          </button>
-        </div>
-      </header>
-
-      <div className="flex-1 p-6">
-        {showHistory ? (
-          <div className="h-full overflow-auto">
-            <div className="space-y-4">
-              <h2 className="text-xl font-semibold font-merriweather text-gray-700">Your Previous Generations</h2>
-              {generations.length === 0 ? (
-                <p className="text-gray-500">No generations yet</p>
-              ) : (
-                <div className="space-y-4">
-                  {generations.map((gen, index) => (
-                    <div key={index} className="p-4 bg-gray-50 rounded-xl border border-gray-200 space-y-2">
-                      <div className="flex justify-between items-start">
-                        <div className="space-y-2">
-                          <p className="text-sm text-gray-600">
-                            {new Date(gen.timestamp).toLocaleString()}
-                          </p>
-                          <p className="text-gray-800">{gen.prompt}</p>
-                          <p className="text-sm text-gray-600">Duration: {gen.duration}s</p>
-                        </div>
-                        <button
-                          onClick={() => deleteGeneration(index)}
-                          className="p-2 text-gray-500 hover:text-red-500 transition"
-                          title="Delete generation"
-                        >
-                          <Trash2 className="h-5 w-5" />
-                        </button>
-                      </div>
-                      <audio controls src={gen.audioUrl} className="w-full" />
-                    </div>
-                  ))}
-                </div>
-              )}
+          {/* User section at bottom */}
+          <div className="absolute bottom-0 left-0 w-full p-4">
+            <div className="flex items-center gap-2 text-[#F2E6D8] mb-2">
+              <User className="h-4 w-4" />
+              <span>{currentUser?.username}</span>
             </div>
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-2 w-full p-2 text-[#F2E6D8] rounded-lg hover:bg-white/10"
+            >
+              <LogOut className="h-5 w-5" />
+              <span>Logout</span>
+            </button>
           </div>
-        ) : (
-          <div className="h-full flex flex-col items-center justify-center gap-6 max-w-3xl mx-auto">
+        </div>
+      </aside>
+
+      {/* Main content */}
+      <div className="p-4 sm:ml-64">
+        <div className="flex gap-6 items-start justify-between">
+          <div className="flex-1 flex flex-col items-center justify-center gap-6 max-w-3xl mx-auto">
             <div className="w-full space-y-2">
               <label className="block text-xl font-medium font-merriweather text-[#F2E6D8]">
                 Tell me what kind of music to create
@@ -260,7 +275,7 @@ return (
               className={`w-64 py-4 px-6 rounded-xl flex items-center justify-center gap-2 text-[#F2E6D8] font-medium font-merriweather text-lg transition hover:bg-[#2F4F4F]
                 ${isLoading || !prompt 
                   ? 'bg-gray-400 cursor-not-allowed' 
-                  : 'bg-[#2F4F4F] hover:bg-blue-700 transform hover:-translate-y-0.5'}`}
+                  : 'bg-blue-600 hover:bg-blue-700 transform hover:-translate-y-0.5'}`}
             >
               {isLoading ? (
                 <>
@@ -275,25 +290,9 @@ return (
               )}
             </button>
             
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => setShowHistory(!showHistory)}
-                className="flex-1 px-4 py-2 text-[#F2E6D8] bg-white/10 rounded-md hover:bg-[#C8A951] transition text-center"
-              >
-                Your Generations
-              </button>
-              <button
-                onClick={() => setShowHistory(!showHistory)}
-                className="flex-1 px-4 py-2 text-[#F2E6D8] bg-white/10 rounded-md hover:bg-[#8A4B2C] transition text-center"
-              >
-                Synthesize
-              </button>
-            </div>
-
-            {isLoading && (
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                <p className="text-gray-600">Creating your music...</p>
+            {audioUrl && !isLoading && (
+              <div className="w-full">
+                <audio ref={audioRef} controls className="w-full" src={audioUrl} />
               </div>
             )}
 
@@ -302,19 +301,54 @@ return (
                 {error}
               </div>
             )}
-
-            {audioUrl && !isLoading && (
-              <div className="w-full">
-                <audio
-                  ref={audioRef}
-                  controls
-                  className="w-full"
-                  src={audioUrl}
-                />
-              </div>
-            )}
           </div>
-        )}
+
+          {/* Right sidebar for generations - now will stick to the right */}
+          {/* Right sidebar for generations */}
+          <div className="w-80 flex-shrink-0">
+            <div className="sticky top-20">
+              <button
+                onClick={() => setIsHistoryOpen(!isHistoryOpen)}
+                className="w-full px-4 py-2 text-[#F2E6D8] bg-white/10 rounded-md hover:bg-[#C8A951] transition text-center flex items-center justify-center gap-2"
+              >
+                <History className="h-5 w-5" />
+                Your Generations
+              </button>
+
+              {isHistoryOpen && (
+                <div className="max-h-[calc(100vh-120px)] overflow-y-auto border border-white/10 rounded-md mt-2">
+                  {generations.length === 0 ? (
+                    <p className="text-[#F2E6D8] p-4 text-center">No generations yet</p>
+                  ) : (
+                    <div className="space-y-4 p-4">
+                      {generations.map((gen, index) => (
+                        <div key={index} className="p-4 bg-white/5 rounded-xl space-y-2">
+                          <div className="flex justify-between items-start">
+                            <div className="space-y-2">
+                              <p className="text-sm text-[#F2E6D8]/80">
+                                {new Date(gen.timestamp).toLocaleString()}
+                              </p>
+                              <p className="text-[#F2E6D8]">{gen.prompt}</p>
+                              <p className="text-sm text-[#F2E6D8]/80">Duration: {gen.duration}s</p>
+                            </div>
+                            <button
+                              onClick={() => deleteGeneration(index)}
+                              className="p-2 text-[#F2E6D8]/80 hover:text-red-500 transition"
+                              title="Delete generation"
+                            >
+                              <Trash2 className="h-5 w-5" />
+                            </button>
+                          </div>
+                          <audio controls src={gen.audioUrl} className="w-full" />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
