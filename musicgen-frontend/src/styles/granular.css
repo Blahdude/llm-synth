@@ -1,0 +1,50 @@
+.granular-container {
+  width: 100%;
+  min-height: 600px;
+  background: #000;
+  display: flex;
+  flex-direction: column;
+}
+
+#waveform {
+  flex: 1;
+  min-height: 400px;
+  position: relative;
+  background: #000;
+}
+
+#controls {
+  min-height: 200px;
+  background: white;
+  padding: 1rem;
+}
+
+#canvas, #canvas2 {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.label {
+  font-size: 1.3em;
+  text-align: center;
+  font-family: 'Open Sans', sans-serif;
+  color: black;
+  margin-bottom: 10px;
+}
+
+.btn {
+  background-color: #2a6496;
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 0.25rem;
+  margin: 0.25rem;
+}
+
+.dial {
+  width: 100px !important;
+  height: 100px !important;
+  display: inline-block;
+}

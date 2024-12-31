@@ -1,13 +1,19 @@
-import React from 'react'
-import MusicGenInterface from './components/MusicGenInterface'
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import MusicGenInterface from './components/MusicGenInterface';
+import GranularSynth from './components/GranularSynth';
+import Settings from './components/Settings';
 import './App.css'
 
 function App() {
   return (
-    <div id="root" className="w-screen h-screen bg-[#2C3E50] text-white flex items-center justify-center overflow-hidden">
-      <MusicGenInterface />
-    </div>
-  )
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<MusicGenInterface />} />
+        <Route path="/synthesize" element={<GranularSynth />} />
+        <Route path="/settings" element={<Settings />} />
+      </Routes>
+    </BrowserRouter>
+  );
 }
 
-export default App
+export default App;

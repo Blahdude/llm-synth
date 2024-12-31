@@ -1,7 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Loader2, Music2, User, LogOut, History, Trash2, Menu, Home, Settings } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { dbService } from '../services/DatabaseService';
 
 const MusicGenInterface = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+
   // User state
   const [currentUser, setCurrentUser] = useState(null);
   const [username, setUsername] = useState('');
@@ -24,6 +29,9 @@ const MusicGenInterface = () => {
 
   // Add state for mobile sidebar toggle
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // Add state for audio URLs
+  const [generationUrls, setGenerationUrls] = useState(new Map());
 
   // Load user data from localStorage on startup
   useEffect(() => {
@@ -56,13 +64,30 @@ const MusicGenInterface = () => {
   const handleLogout = () => {
     setCurrentUser(null);
     setGenerations([]);
+    generationUrls.forEach(url => URL.revokeObjectURL(url));
+    setGenerationUrls(new Map());
     localStorage.removeItem('currentUser');
+    localStorage.removeItem('selectedAudioForSynth'); // Clear selected audio
   };
 
-  const loadUserGenerations = (username) => {
-    const savedGenerations = localStorage.getItem(`generations_${username}`);
-    if (savedGenerations) {
-      setGenerations(JSON.parse(savedGenerations));
+  const loadUserGenerations = async (username) => {
+    try {
+      const generations = await dbService.getUserGenerations(username);
+      
+      // Clear old URLs
+      generationUrls.forEach(url => URL.revokeObjectURL(url));
+      
+      // Create new URL map
+      const newUrls = new Map();
+      generations.forEach(gen => {
+        newUrls.set(gen.id, URL.createObjectURL(gen.audioBlob));
+      });
+      
+      setGenerationUrls(newUrls);
+      setGenerations(generations);
+    } catch (error) {
+      console.error('Error loading generations:', error);
+      setError('Failed to load generations');
     }
   };
 
@@ -128,46 +153,74 @@ const MusicGenInterface = () => {
     }
   };
 
+  const handleUseSynthesizer = async (generationId) => {
+    try {
+      // Get the audio blob URL from our map
+      const audioUrl = generationUrls.get(generationId);
+      if (!audioUrl) {
+        throw new Error('Audio URL not found');
+      }
+
+      // Store both the ID and the URL
+      localStorage.setItem('selectedAudioForSynth', generationId);
+      localStorage.setItem('selectedAudioUrl', audioUrl);
+      
+      navigate('/synthesize');
+    } catch (error) {
+      console.error('Error preparing audio for synthesizer:', error);
+      setError('Failed to prepare audio for synthesizer');
+    }
+  };
+
+  // Clean up URLs when component unmounts
+  useEffect(() => {
+    return () => {
+      generationUrls.forEach(url => URL.revokeObjectURL(url));
+    };
+  }, [generationUrls]);
+
   // Login Screen
   if (!currentUser) {
     return (
-    <div>
-      <div className="flex items-center justify-center overflow-hidden">
-        <h1 className="text-2xl font-merriweather text-[#F2E6D8] text-center">
-          Login to LLM Synth
-        </h1>
-      </div>
-      
-      <div className="bg-[#2C3E50] rounded-xl overflow-hidden">
-        <div className="p-6 space-y-4">
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="Enter your username"
-              className="w-full px-4 py-2 text-black rounded-xl focus:border-color-white/10 focus:ring-2 focus:ring-white/10 focus:outline-none"
-            />
+      <div className="min-h-screen bg-[#2C3E50] flex items-center justify-center p-4">
+        <div className="w-full max-w-md space-y-4">
+          <div className="flex items-center justify-center overflow-hidden">
+            <h1 className="text-2xl font-merriweather text-[#F2E6D8] text-center">
+              Login to LLM Synth
+            </h1>
+          </div>
+          
+          <div className="bg-[#2C3E50] rounded-xl overflow-hidden">
+            <div className="p-6 space-y-4">
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="Enter your username"
+                  className="w-full px-4 py-2 text-black rounded-xl focus:border-color-white/10 focus:ring-2 focus:ring-white/10 focus:outline-none"
+                />
 
-          <button
-            onClick={handleLogin}
-            className="w-full py-3 px-4 bg-white/10 text-[#F2E6D8] rounded-xl"
-          >
-            Continue
-          </button>
+              <button
+                onClick={handleLogin}
+                className="w-full py-3 px-4 bg-white/10 text-[#F2E6D8] rounded-xl"
+              >
+                Continue
+              </button>
 
-          {userError && (
-            <div className="p-4 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm">
-              {userError}
+              {userError && (
+                <div className="p-4 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm">
+                  {userError}
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
       </div>
-    </div>
-  );
-}
+    );
+  }
 
-return (
-    <div className="bg-[#2C3E50]">
+  return (
+    <div className="min-h-screen bg-[#2C3E50] flex">
       {/* Mobile sidebar toggle button */}
       <button
         onClick={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -192,28 +245,37 @@ return (
           
           <ul className="space-y-2 font-medium">
             <li>
-              <a href="#" className="flex items-center p-2 text-[#F2E6D8] rounded-lg hover:bg-white/10 group">
-                <Home className="w-5 h-5" />
-                <span className="ms-3">Home</span>
-              </a>
+              <Link
+                  to="/"
+                  className={`flex items-center p-2 text-[#F2E6D8] rounded-lg hover:bg-white/10 group ${
+                    location.pathname === '/' ? 'bg-white/10' : ''
+                  }`}
+                >
+                  <Music2 className="w-5 h-5" />
+                  <span className="ms-3">Generate Music</span>
+              </Link>
             </li>
             <li>
-              <a href="#" className="flex items-center p-2 text-[#F2E6D8] rounded-lg hover:bg-white/10 group">
-                <Music2 className="w-5 h-5" />
-                <span className="ms-3">Generate Music</span>
-              </a>
+              <Link
+                  to="/synthesize"
+                  className={`flex items-center p-2 text-[#F2E6D8] rounded-lg hover:bg-white/10 group ${
+                    location.pathname === '/synthesize' ? 'bg-white/10' : ''
+                  }`}
+                >
+                  <Music2 className="w-5 h-5" />
+                  <span className="ms-3">Synthesize</span>
+              </Link>
             </li>
             <li>
-              <a href="#" className="flex items-center p-2 text-[#F2E6D8] rounded-lg hover:bg-white/10 group">
-                <History className="w-5 h-5" />
-                <span className="ms-3">History</span>
-              </a>
-            </li>
-            <li>
-              <a href="#" className="flex items-center p-2 text-[#F2E6D8] rounded-lg hover:bg-white/10 group">
-                <Settings className="w-5 h-5" />
-                <span className="ms-3">Settings</span>
-              </a>
+              <Link
+                  to="/settings"
+                  className={`flex items-center p-2 text-[#F2E6D8] rounded-lg hover:bg-white/10 group ${
+                    location.pathname === '/settings' ? 'bg-white/10' : ''
+                  }`}
+                >
+                  <Settings className="w-5 h-5" />
+                  <span className="ms-3">Settings</span>
+              </Link>
             </li>
           </ul>
 
@@ -235,9 +297,9 @@ return (
       </aside>
 
       {/* Main content */}
-      <div className="p-4 sm:ml-64">
-        <div className="flex gap-6 items-start justify-between">
-          <div className="flex-1 flex flex-col items-center justify-center gap-6 max-w-3xl mx-auto">
+      <div className="p-4 sm:ml-64 flex-1 flex items-center justify-center">
+        <div className="flex gap-6 items-start justify-between w-full max-w-6xl mx-auto">
+          <div className="flex-1 flex flex-col items-center justify-center gap-6 max-w-3xl">
             <div className="w-full space-y-2">
               <label className="block text-xl font-medium font-merriweather text-[#F2E6D8]">
                 Tell me what kind of music to create
@@ -303,7 +365,6 @@ return (
             )}
           </div>
 
-          {/* Right sidebar for generations - now will stick to the right */}
           {/* Right sidebar for generations */}
           <div className="w-80 flex-shrink-0">
             <div className="sticky top-20">
@@ -321,8 +382,8 @@ return (
                     <p className="text-[#F2E6D8] p-4 text-center">No generations yet</p>
                   ) : (
                     <div className="space-y-4 p-4">
-                      {generations.map((gen, index) => (
-                        <div key={index} className="p-4 bg-white/5 rounded-xl space-y-2">
+                      {generations.map((gen) => (
+                        <div key={gen.id} className="p-4 bg-white/5 rounded-xl space-y-2">
                           <div className="flex justify-between items-start">
                             <div className="space-y-2">
                               <p className="text-sm text-[#F2E6D8]/80">
@@ -331,15 +392,28 @@ return (
                               <p className="text-[#F2E6D8]">{gen.prompt}</p>
                               <p className="text-sm text-[#F2E6D8]/80">Duration: {gen.duration}s</p>
                             </div>
-                            <button
-                              onClick={() => deleteGeneration(index)}
-                              className="p-2 text-[#F2E6D8]/80 hover:text-red-500 transition"
-                              title="Delete generation"
-                            >
-                              <Trash2 className="h-5 w-5" />
-                            </button>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handleUseSynthesizer(gen.id)}
+                                className="p-2 text-[#F2E6D8]/80 hover:text-[#F2E6D8] transition"
+                                title="Use in Synthesizer"
+                              >
+                                <Music2 className="h-5 w-5" />
+                              </button>
+                              <button
+                                onClick={() => deleteGeneration(index)}
+                                className="p-2 text-[#F2E6D8]/80 hover:text-red-500 transition"
+                                title="Delete generation"
+                              >
+                                <Trash2 className="h-5 w-5" />
+                              </button>
+                            </div>
                           </div>
-                          <audio controls src={gen.audioUrl} className="w-full" />
+                          <audio 
+                            controls 
+                            src={generationUrls.get(gen.id)} 
+                            className="w-full" 
+                          />
                         </div>
                       ))}
                     </div>
