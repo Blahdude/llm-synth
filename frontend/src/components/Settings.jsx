@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth } from '../firebase';
 import { deleteUser } from 'firebase/auth';
+import Layout from './Layout';
 
 const Settings = () => {
   const navigate = useNavigate();
@@ -33,10 +34,9 @@ const Settings = () => {
   };
 
   return (
-    <div className="p-4 sm:ml-64">
-      <h1 className="text-2xl font-merriweather text-[#F2E6D8] mb-8">Settings</h1>
-      
-      <div className="max-w-md">
+    <div className="p-4 sm:ml-64 flex items-center justify-center min-h-[calc(100vh-4rem)]">
+      <Layout />
+      <div className="w-full max-w-md">
         <div className="bg-red-50 border border-red-200 rounded-xl p-6">
           <h2 className="text-xl font-merriweather text-red-700 mb-4">Danger Zone</h2>
           

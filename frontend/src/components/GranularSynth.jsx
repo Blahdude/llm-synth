@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { dbService } from '../services/DatabaseService';
+import Layout from './Layout';
 
 const GranularSynth = () => {
   const [error, setError] = useState(null);
@@ -319,6 +320,7 @@ const GranularSynth = () => {
 
   return (
     <div className="text-white">
+      <Layout />
       <h2 className="text-xl mb-4">Granular Synthesizer</h2>
       
       {/* Styled file input */}
