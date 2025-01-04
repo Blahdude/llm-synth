@@ -1,9 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Loader2, Music2, User, LogOut, History, Trash2, Menu, Home, Settings } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { dbService } from '../services/DatabaseService';
+import { auth, db, storage } from '../firebase';  // if in components folder
+import { onAuthStateChanged, getAuth } from 'firebase/auth';
+import { collection, addDoc, query, where, getDocs, deleteDoc, doc, orderBy, Timestamp } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import LoginPage from './LoginPage';
 
 const MusicGenInterface = () => {
+  console.log('MusicGenInterface rendering');
+
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -12,7 +18,7 @@ const MusicGenInterface = () => {
   const [username, setUsername] = useState('');
   const [userError, setUserError] = useState('');
   
-  // Music generation state
+  // Music generation
   const [prompt, setPrompt] = useState('');
   const [duration, setDuration] = useState(10);
   const [isLoading, setIsLoading] = useState(false);
@@ -33,14 +39,32 @@ const MusicGenInterface = () => {
   // Add state for audio URLs
   const [generationUrls, setGenerationUrls] = useState(new Map());
 
-  // Load user data from localStorage on startup
+  // Add state for authentication
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  // Replace localStorage useEffect with Firebase auth listener
   useEffect(() => {
-    const savedUser = localStorage.getItem('currentUser');
-    if (savedUser) {
-      const user = JSON.parse(savedUser);
-      setCurrentUser(user);
-      loadUserGenerations(user.username);
-    }
+    const auth = getAuth();
+    console.log('Setting up auth listener');
+    
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      console.log('Auth state changed:', user);
+      if (user) {
+        setIsAuthenticated(true);
+        const userData = {
+          username: user.displayName || user.email,
+          uid: user.uid
+        };
+        setCurrentUser(userData);
+        loadUserGenerations(user.uid);
+      } else {
+        setIsAuthenticated(false);
+        setCurrentUser(null);
+        setGenerations([]);
+      }
+    });
+
+    return () => unsubscribe();
   }, []);
 
   const handleLogin = () => {
@@ -61,55 +85,153 @@ const MusicGenInterface = () => {
     setUsername('');
   };
 
-  const handleLogout = () => {
-    setCurrentUser(null);
-    setGenerations([]);
-    generationUrls.forEach(url => URL.revokeObjectURL(url));
-    setGenerationUrls(new Map());
-    localStorage.removeItem('currentUser');
-    localStorage.removeItem('selectedAudioForSynth'); // Clear selected audio
+  const handleLogout = async () => {
+    try {
+      await auth.signOut();
+      setCurrentUser(null);
+      setGenerations([]);
+      generationUrls.forEach(url => URL.revokeObjectURL(url));
+      setGenerationUrls(new Map());
+      localStorage.removeItem('selectedAudioForSynth');
+      navigate('/'); // Redirect to home/login page
+    } catch (error) {
+      console.error('Error signing out:', error);
+      setError('Failed to sign out');
+    }
   };
 
-  const loadUserGenerations = async (username) => {
+  const loadUserGenerations = async (uid) => {
+    console.log('Loading generations for uid:', uid);
+
+    if (!uid) {
+      console.error('UID is undefined or null. Cannot fetch generations.');
+      return;
+    }
+
     try {
-      const generations = await dbService.getUserGenerations(username);
+      console.log('accessing collection');
+      const generationsRef = collection(db, 'generatedAudio');
+      console.log('accessed collection');
+      const q = query(generationsRef, 
+        where('userId', '==', uid)
+      );
+
+      console.log('accessed query');
       
-      // Clear old URLs
-      generationUrls.forEach(url => URL.revokeObjectURL(url));
-      
-      // Create new URL map
-      const newUrls = new Map();
-      generations.forEach(gen => {
-        newUrls.set(gen.id, URL.createObjectURL(gen.audioBlob));
+      const querySnapshot = await getDocs(q);
+
+      querySnapshot.forEach((doc) => {
+        console.log(doc.id, " => ", doc.data());
       });
-      
-      setGenerationUrls(newUrls);
-      setGenerations(generations);
+
+      console.log('accessed querySnapshot');
+
+      if (querySnapshot.empty) {
+        console.log('No generations found for this user.');
+        setGenerations([]);
+        return;
+      }
+
+      const generationsData = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      setGenerations(generationsData);
     } catch (error) {
-      console.error('Error loading generations:', error);
+      console.error('Error fetching user generations:', error.message);
       setError('Failed to load generations');
     }
   };
 
-  const saveGeneration = (generationData) => {
-    const newGenerations = [...generations, generationData];
-    setGenerations(newGenerations);
-    localStorage.setItem(`generations_${currentUser.username}`, JSON.stringify(newGenerations));
+  const saveGeneration = async (generationData) => {
+    try {
+      if (!isAuthenticated || !currentUser) {
+        throw new Error('User not authenticated');
+      }
+
+      console.log('Starting save generation process...', generationData);
+      console.log('Current user:', currentUser);
+
+      const timestamp = new Date().getTime();
+      const filename = `audio_${currentUser.uid}_${timestamp}.wav`;
+      
+      // Create a reference to Firebase Storage
+      const storageRef = ref(storage, `audio/${filename}`);
+
+      // Upload the audio file to Firebase Storage
+      const uploadResult = await uploadBytes(storageRef, generationData.wavFile);
+      console.log('Audio uploaded successfully', uploadResult);
+
+      // Get the download URL
+      const downloadURL = await getDownloadURL(uploadResult.ref);
+      console.log('Got download URL:', downloadURL);
+
+      // Create the generation document
+      const generationDoc = {
+        userId: currentUser.uid,
+        prompt: generationData.prompt,
+        duration: parseInt(generationData.duration),
+        timestamp: Timestamp.now(),
+        audioPath: `audio/${filename}`,
+        audioUrl: downloadURL
+      };
+
+      console.log('Generation doc to save:', generationDoc);
+
+      try {
+        // Changed collection name here
+        const generationsRef = collection(db, 'generatedAudio');
+        const docRef = await addDoc(generationsRef, generationDoc);
+        console.log('Saved to Firestore with ID:', docRef.id);
+
+        // Update local state with new generation
+        const newGeneration = {
+          ...generationDoc,
+          id: docRef.id
+        };
+        
+        setGenerations(prev => [...prev, newGeneration]);
+        console.log('Local state updated');
+      } catch (firestoreError) {
+        console.error('Specific Firestore error:', firestoreError);
+        throw new Error(`Firestore save failed: ${firestoreError.message}`);
+      }
+
+    } catch (error) {
+      console.error('Error in saveGeneration:', error);
+      setError(`Failed to save generation: ${error.message}`);
+      throw error;
+    }
   };
 
-  const deleteGeneration = (index) => {
-    const newGenerations = generations.filter((_, i) => i !== index);
-    setGenerations(newGenerations);
-    localStorage.setItem(`generations_${currentUser.username}`, JSON.stringify(newGenerations));
-    
-    // Clean up the audio URL to prevent memory leaks
-    if (generations[index].audioUrl) {
-      URL.revokeObjectURL(generations[index].audioUrl);
+  const deleteGeneration = async (generationId) => {
+    try {
+      const generation = generations.find(gen => gen.id === generationId);
+      if (!generation) {
+        throw new Error('Generation not found');
+      }
+
+      // Delete from Firestore (updated collection name)
+      await deleteDoc(doc(db, 'generatedAudio', generationId));
+      
+      // Delete from Storage if there's a storage path
+      if (generation.audioPath) {
+        const storageRef = ref(storage, generation.audioPath);
+        await deleteObject(storageRef);
+      }
+
+      // Update local state
+      setGenerations(prev => prev.filter(gen => gen.id !== generationId));
+      
+    } catch (error) {
+      console.error('Error deleting generation:', error);
+      setError('Failed to delete generation');
     }
   };
 
   const handleGenerate = async () => {
-    if (!currentUser) {
+    if (!isAuthenticated || !currentUser) {
       setError('Please log in to generate music');
       return;
     }
@@ -118,6 +240,7 @@ const MusicGenInterface = () => {
     setError('');
     
     try {
+      console.log('Starting generation with prompt:', prompt);
       const response = await fetch('http://localhost:8000/generate', {
         method: 'POST',
         headers: {
@@ -134,19 +257,26 @@ const MusicGenInterface = () => {
         throw new Error(`Failed to generate music: ${errorData}`);
       }
 
-      const data = await response.blob();
-      const url = URL.createObjectURL(data);
-      setAudioUrl(url);
+      const audioBlob = await response.blob();
+      console.log('Received audio blob:', audioBlob);
 
-      // Save the generation
-      saveGeneration({
+      const wavFile = new File([audioBlob], 'generated_music.wav', {
+        type: 'audio/wav'
+      });
+      console.log('Created WAV file:', wavFile);
+
+      const tempUrl = URL.createObjectURL(wavFile);
+      setAudioUrl(tempUrl);
+
+      await saveGeneration({
         prompt,
         duration,
         timestamp: new Date().toISOString(),
-        audioUrl: url
+        wavFile
       });
 
     } catch (err) {
+      console.error('Error in handleGenerate:', err);
       setError(err.message);
     } finally {
       setIsLoading(false);
@@ -155,15 +285,14 @@ const MusicGenInterface = () => {
 
   const handleUseSynthesizer = async (generationId) => {
     try {
-      // Get the audio blob URL from our map
-      const audioUrl = generationUrls.get(generationId);
-      if (!audioUrl) {
-        throw new Error('Audio URL not found');
+      const generation = generations.find(gen => gen.id === generationId);
+      if (!generation) {
+        throw new Error('Generation not found');
       }
 
-      // Store both the ID and the URL
+      // Store the generation ID and URL for reference
       localStorage.setItem('selectedAudioForSynth', generationId);
-      localStorage.setItem('selectedAudioUrl', audioUrl);
+      localStorage.setItem('selectedAudioUrl', generation.audioUrl);
       
       navigate('/synthesize');
     } catch (error) {
@@ -180,43 +309,13 @@ const MusicGenInterface = () => {
   }, [generationUrls]);
 
   // Login Screen
-  if (!currentUser) {
-    return (
-      <div className="min-h-screen bg-[#2C3E50] flex items-center justify-center p-4">
-        <div className="w-full max-w-md space-y-4">
-          <div className="flex items-center justify-center overflow-hidden">
-            <h1 className="text-2xl font-merriweather text-[#F2E6D8] text-center">
-              Login to LLM Synth
-            </h1>
-          </div>
-          
-          <div className="bg-[#2C3E50] rounded-xl overflow-hidden">
-            <div className="p-6 space-y-4">
-                <input
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Enter your username"
-                  className="w-full px-4 py-2 text-black rounded-xl focus:border-color-white/10 focus:ring-2 focus:ring-white/10 focus:outline-none"
-                />
+  if (!isAuthenticated) {
+    return <LoginPage />;
+  }
 
-              <button
-                onClick={handleLogin}
-                className="w-full py-3 px-4 bg-white/10 text-[#F2E6D8] rounded-xl"
-              >
-                Continue
-              </button>
-
-              {userError && (
-                <div className="p-4 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm">
-                  {userError}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+  if (!auth) {
+    console.log('Firebase auth not initialized');
+    return <div>Loading...</div>;
   }
 
   return (
@@ -387,7 +486,7 @@ const MusicGenInterface = () => {
                           <div className="flex justify-between items-start">
                             <div className="space-y-2">
                               <p className="text-sm text-[#F2E6D8]/80">
-                                {new Date(gen.timestamp).toLocaleString()}
+                                {new Date(gen.timestamp.seconds * 1000).toLocaleString()}
                               </p>
                               <p className="text-[#F2E6D8]">{gen.prompt}</p>
                               <p className="text-sm text-[#F2E6D8]/80">Duration: {gen.duration}s</p>
@@ -401,7 +500,7 @@ const MusicGenInterface = () => {
                                 <Music2 className="h-5 w-5" />
                               </button>
                               <button
-                                onClick={() => deleteGeneration(index)}
+                                onClick={() => deleteGeneration(gen.id)}
                                 className="p-2 text-[#F2E6D8]/80 hover:text-red-500 transition"
                                 title="Delete generation"
                               >
@@ -409,11 +508,15 @@ const MusicGenInterface = () => {
                               </button>
                             </div>
                           </div>
-                          <audio 
-                            controls 
-                            src={generationUrls.get(gen.id)} 
-                            className="w-full" 
-                          />
+                          {gen.audioUrl && (
+                            <div className="mt-2">
+                              <audio 
+                                controls 
+                                src={gen.audioUrl}
+                                className="w-full" 
+                              />
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>

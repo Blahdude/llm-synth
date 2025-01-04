@@ -40,18 +40,24 @@ class DatabaseService {
       const transaction = db.transaction([this.audioStoreName], 'readwrite');
       const store = transaction.objectStore(this.audioStoreName);
 
-      const audioData = {
-        id,
-        userId,
-        audioBlob,
-        ...metadata,
-        timestamp: new Date().toISOString()
-      };
+      // Convert Blob to ArrayBuffer before storing
+      const reader = new FileReader();
+      reader.onload = () => {
+        const audioData = {
+          id,
+          userId,
+          audioBuffer: reader.result,  // Store as ArrayBuffer
+          mimeType: audioBlob.type,    // Store the MIME type
+          ...metadata,
+          timestamp: new Date().toISOString()
+        };
 
-      const request = store.add(audioData);
-      
-      request.onsuccess = () => resolve(id);
-      request.onerror = () => reject(request.error);
+        const request = store.add(audioData);
+        request.onsuccess = () => resolve(id);
+        request.onerror = () => reject(request.error);
+      };
+      reader.onerror = () => reject(reader.error);
+      reader.readAsArrayBuffer(audioBlob);
     });
   }
 
@@ -65,10 +71,13 @@ class DatabaseService {
       const request = index.getAll(IDBKeyRange.only(userId));
       
       request.onsuccess = () => {
-        // Sort by timestamp, newest first
-        const results = request.result.sort((a, b) => 
-          new Date(b.timestamp) - new Date(a.timestamp)
-        );
+        // Convert ArrayBuffer back to Blob for each result
+        const results = request.result.map(item => ({
+          ...item,
+          audioBlob: new Blob([item.audioBuffer], { type: item.mimeType })
+        }))
+        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+        
         resolve(results);
       };
       request.onerror = () => reject(request.error);
