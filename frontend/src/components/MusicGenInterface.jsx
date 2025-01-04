@@ -29,10 +29,6 @@ const MusicGenInterface = () => {
 
   // Generations history
   const [generations, setGenerations] = useState([]);
-  const [showHistory, setShowHistory] = useState(false);
-
-  // Add this new state for dropdown
-  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
   // Add state for mobile sidebar toggle
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -312,148 +308,153 @@ const MusicGenInterface = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#2C3E50] flex">
+    <div className="min-h-screen bg-[#2C3E50]">
+      {/* Top layout / navbar if you have one */}
       <Layout handleLogout={handleLogout} currentUser={currentUser} />
-      {/* Mobile sidebar toggle button */}
-      <button
-        onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-        className="fixed top-4 left-4 inline-flex items-center p-2 text-sm text-[#F2E6D8] rounded-lg sm:hidden hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/10"
-      >
-        <span className="sr-only">Open sidebar</span>
-        <Menu className="w-6 h-6" />
-      </button>
 
-      {/* Main content */}
-      <div className="p-4 sm:ml-64 flex-1 flex items-center justify-center">
-        <div className="flex gap-6 items-start justify-between w-full max-w-6xl mx-auto">
-          <div className="flex-1 flex flex-col items-center justify-center gap-6 max-w-3xl">
-            <div className="w-full space-y-2">
-              <label className="block text-xl font-medium font-merriweather text-[#F2E6D8]">
-                Tell me what kind of music to create
-              </label>
-              <div className="relative">
-              <textarea
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                placeholder="Describe the music you want to generate... (e.g., 'A soft piano melody with gentle strings')"
-                className="w-full h-24 px-4 py-3 text-black border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-colors resize-none bg-gray-50"
-                disabled={isLoading}
-              />
-              </div>
-            </div>
-
-            <div className="w-full space-y-2">
-              <div className="flex justify-between">
-                <label className="text-lg font-medium font-merriweather text-[#F2E6D8]">Duration</label>
-                <span className="text-[#F2E6D8] font-medium font-merriweather">{duration} seconds</span>
-              </div>
-              <input
-                type="range"
-                min="1"
-                max="30"
-                value={duration}
-                onChange={(e) => setDuration(Number(e.target.value))}
-                className="w-full h-2 bg-blue-200 rounded-lg appearance-none cursor-pointer"
-                disabled={isLoading}
-              />
-            </div>
-
-            <button
-              onClick={handleGenerate}
-              disabled={isLoading || !prompt}
-              className={`w-64 py-4 px-6 rounded-xl flex items-center justify-center gap-2 text-[#F2E6D8] font-medium font-merriweather text-lg transition hover:bg-[#2F4F4F]
-                ${isLoading || !prompt 
-                  ? 'bg-gray-400 cursor-not-allowed' 
-                  : 'bg-blue-600 hover:bg-blue-700 transform hover:-translate-y-0.5'}`}
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="animate-spin h-5 w-5" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <Music2 className="h-5 w-5" />
-                  Generate Music
-                </>
-              )}
-            </button>
-            
-            {audioUrl && !isLoading && (
-              <div className="w-full">
-                <audio ref={audioRef} controls className="w-full" src={audioUrl} />
-              </div>
-            )}
-
-            {error && (
-              <div className="p-3 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm">
-                {error}
-              </div>
-            )}
+      {/* Main 2-column layout (content + sidebar) */}
+      <div className="grid grid-cols-1 md:grid-cols-[1fr,320px] gap-4 p-4">
+        {/* Main content area, centered */}
+        <div className="mx-auto w-full max-w-3xl flex flex-col items-center justify-center gap-6">
+          {/* Prompt input */}
+          <div className="w-full space-y-2">
+            <label className="block text-xl font-medium font-merriweather text-[#F2E6D8]">
+              Tell me what kind of music to create
+            </label>
+            <textarea
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              placeholder="Describe the music you want to generate..."
+              className="w-full h-24 px-4 py-3 text-black border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-colors resize-none bg-gray-50"
+              disabled={isLoading}
+            />
           </div>
 
-          {/* Right sidebar for generations */}
-          <div className="w-80 flex-shrink-0">
-            <div className="sticky top-20">
-              <button
-                onClick={() => setIsHistoryOpen(!isHistoryOpen)}
-                className="w-full px-4 py-2 text-[#F2E6D8] bg-white/10 rounded-md hover:bg-[#C8A951] transition text-center flex items-center justify-center gap-2"
-              >
-                <History className="h-5 w-5" />
-                Your Generations
-              </button>
+          {/* Duration slider */}
+          <div className="w-full space-y-2">
+            <div className="flex justify-between">
+              <label className="text-lg font-medium font-merriweather text-[#F2E6D8]">
+                Duration
+              </label>
+              <span className="text-[#F2E6D8] font-medium font-merriweather">
+                {duration} seconds
+              </span>
+            </div>
+            <input
+              type="range"
+              min="1"
+              max="30"
+              value={duration}
+              onChange={(e) => setDuration(Number(e.target.value))}
+              className="w-full h-2 bg-blue-200 rounded-lg appearance-none cursor-pointer"
+              disabled={isLoading}
+            />
+          </div>
 
-              {isHistoryOpen && (
-                <div className="max-h-[calc(100vh-120px)] overflow-y-auto border border-white/10 rounded-md mt-2">
-                  {generations.length === 0 ? (
-                    <p className="text-[#F2E6D8] p-4 text-center">No generations yet</p>
-                  ) : (
-                    <div className="space-y-4 p-4">
-                      {generations.map((gen) => (
-                        <div key={gen.id} className="p-4 bg-white/5 rounded-xl space-y-2">
-                          <div className="flex justify-between items-start">
-                            <div className="space-y-2">
-                              <p className="text-sm text-[#F2E6D8]/80">
-                                {new Date(gen.timestamp.seconds * 1000).toLocaleString()}
-                              </p>
-                              <p className="text-[#F2E6D8]">{gen.prompt}</p>
-                              <p className="text-sm text-[#F2E6D8]/80">Duration: {gen.duration}s</p>
-                            </div>
-                            <div className="flex gap-2">
-                              <button
-                                onClick={() => handleUseSynthesizer(gen.id)}
-                                className="p-2 text-[#F2E6D8]/80 hover:text-[#F2E6D8] transition"
-                                title="Use in Synthesizer"
-                              >
-                                <Music2 className="h-5 w-5" />
-                              </button>
-                              <button
-                                onClick={() => deleteGeneration(gen.id)}
-                                className="p-2 text-[#F2E6D8]/80 hover:text-red-500 transition"
-                                title="Delete generation"
-                              >
-                                <Trash2 className="h-5 w-5" />
-                              </button>
-                            </div>
-                          </div>
-                          {gen.audioUrl && (
-                            <div className="mt-2">
-                              <audio 
-                                controls 
-                                src={gen.audioUrl}
-                                className="w-full" 
-                              />
-                            </div>
-                          )}
-                        </div>
-                      ))}
+          {/* Generate button */}
+          <button
+            onClick={handleGenerate}
+            disabled={isLoading || !prompt}
+            className={`w-64 py-4 px-6 rounded-xl flex items-center justify-center gap-2 text-[#F2E6D8] font-medium font-merriweather text-lg transition hover:bg-[#2F4F4F]
+              ${
+                isLoading || !prompt
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : 'bg-blue-600 hover:bg-blue-700 transform hover:-translate-y-0.5'
+              }`}
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="animate-spin h-5 w-5" />
+                Generating...
+              </>
+            ) : (
+              <>
+                <Music2 className="h-5 w-5" />
+                Generate Music
+              </>
+            )}
+          </button>
+
+          {/* Audio preview */}
+          {audioUrl && !isLoading && (
+            <div className="w-full">
+              <audio ref={audioRef} controls className="w-full" src={audioUrl} />
+            </div>
+          )}
+
+          {/* Error message */}
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm">
+              {error}
+            </div>
+          )}
+        </div>
+
+        {/* Sidebar: sticky, scrollable */}
+        <aside
+          className="
+            bg-white/5
+            rounded-lg
+            border border-white/10
+            p-4
+            md:sticky md:top-4
+            max-h-[calc(100vh-2rem)]
+            overflow-y-auto
+          "
+        >
+          <h2 className="text-xl font-merriweather text-[#F2E6D8] mb-4 flex items-center gap-2">
+            <History className="h-5 w-5" />
+            Your Generations
+          </h2>
+
+          {/* Sidebar content */}
+          {generations.length === 0 ? (
+            <p className="text-[#F2E6D8] text-center">No generations yet</p>
+          ) : (
+            <div className="space-y-4">
+              {generations.map((gen) => (
+                <div
+                  key={gen.id}
+                  className="p-4 bg-white/5 rounded-xl space-y-2"
+                >
+                  <div className="flex justify-between items-start">
+                    <div className="space-y-2">
+                      <p className="text-sm text-[#F2E6D8]/80">
+                        {new Date(gen.timestamp.seconds * 1000).toLocaleString()}
+                      </p>
+                      <p className="text-[#F2E6D8]">{gen.prompt}</p>
+                      <p className="text-sm text-[#F2E6D8]/80">
+                        Duration: {gen.duration}s
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleUseSynthesizer(gen.id)}
+                        className="p-2 text-[#F2E6D8]/80 hover:text-[#F2E6D8] transition"
+                        title="Use in Synthesizer"
+                      >
+                        <Music2 className="h-5 w-5" />
+                      </button>
+                      <button
+                        onClick={() => deleteGeneration(gen.id)}
+                        className="p-2 text-[#F2E6D8]/80 hover:text-red-500 transition"
+                        title="Delete generation"
+                      >
+                        <Trash2 className="h-5 w-5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {gen.audioUrl && (
+                    <div className="mt-2">
+                      <audio controls src={gen.audioUrl} className="w-full" />
                     </div>
                   )}
                 </div>
-              )}
+              ))}
             </div>
-          </div>
-        </div>
+          )}
+        </aside>
       </div>
     </div>
   );
