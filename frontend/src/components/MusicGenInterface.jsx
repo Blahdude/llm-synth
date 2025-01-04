@@ -7,6 +7,7 @@ import { collection, addDoc, query, where, getDocs, deleteDoc, doc, orderBy, Tim
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import LoginPage from './LoginPage';
 import Layout from './Layout';
+import GenerationsSidebar from './GenerationsSidebar';
 
 const MusicGenInterface = () => {
   console.log('MusicGenInterface rendering');
@@ -309,14 +310,10 @@ const MusicGenInterface = () => {
 
   return (
     <div className="min-h-screen bg-[#2C3E50]">
-      {/* Top layout / navbar if you have one */}
       <Layout handleLogout={handleLogout} currentUser={currentUser} />
 
-      {/* Main 2-column layout (content + sidebar) */}
       <div className="grid grid-cols-1 md:grid-cols-[1fr,320px] gap-4 p-4">
-        {/* Main content area, centered */}
         <div className="mx-auto w-full max-w-3xl flex flex-col items-center justify-center gap-6">
-          {/* Prompt input */}
           <div className="w-full space-y-2">
             <label className="block text-xl font-medium font-merriweather text-[#F2E6D8]">
               Tell me what kind of music to create
@@ -330,7 +327,6 @@ const MusicGenInterface = () => {
             />
           </div>
 
-          {/* Duration slider */}
           <div className="w-full space-y-2">
             <div className="flex justify-between">
               <label className="text-lg font-medium font-merriweather text-[#F2E6D8]">
@@ -351,7 +347,6 @@ const MusicGenInterface = () => {
             />
           </div>
 
-          {/* Generate button */}
           <button
             onClick={handleGenerate}
             disabled={isLoading || !prompt}
@@ -375,14 +370,12 @@ const MusicGenInterface = () => {
             )}
           </button>
 
-          {/* Audio preview */}
           {audioUrl && !isLoading && (
             <div className="w-full">
               <audio ref={audioRef} controls className="w-full" src={audioUrl} />
             </div>
           )}
 
-          {/* Error message */}
           {error && (
             <div className="p-3 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm">
               {error}
@@ -390,71 +383,11 @@ const MusicGenInterface = () => {
           )}
         </div>
 
-        {/* Sidebar: sticky, scrollable */}
-        <aside
-          className="
-            bg-white/5
-            rounded-lg
-            border border-white/10
-            p-4
-            md:sticky md:top-4
-            max-h-[calc(100vh-2rem)]
-            overflow-y-auto
-          "
-        >
-          <h2 className="text-xl font-merriweather text-[#F2E6D8] mb-4 flex items-center gap-2">
-            <History className="h-5 w-5" />
-            Your Generations
-          </h2>
-
-          {/* Sidebar content */}
-          {generations.length === 0 ? (
-            <p className="text-[#F2E6D8] text-center">No generations yet</p>
-          ) : (
-            <div className="space-y-4">
-              {generations.map((gen) => (
-                <div
-                  key={gen.id}
-                  className="p-4 bg-white/5 rounded-xl space-y-2"
-                >
-                  <div className="flex justify-between items-start">
-                    <div className="space-y-2">
-                      <p className="text-sm text-[#F2E6D8]/80">
-                        {new Date(gen.timestamp.seconds * 1000).toLocaleString()}
-                      </p>
-                      <p className="text-[#F2E6D8]">{gen.prompt}</p>
-                      <p className="text-sm text-[#F2E6D8]/80">
-                        Duration: {gen.duration}s
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleUseSynthesizer(gen.id)}
-                        className="p-2 text-[#F2E6D8]/80 hover:text-[#F2E6D8] transition"
-                        title="Use in Synthesizer"
-                      >
-                        <Music2 className="h-5 w-5" />
-                      </button>
-                      <button
-                        onClick={() => deleteGeneration(gen.id)}
-                        className="p-2 text-[#F2E6D8]/80 hover:text-red-500 transition"
-                        title="Delete generation"
-                      >
-                        <Trash2 className="h-5 w-5" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {gen.audioUrl && (
-                    <div className="mt-2">
-                      <audio controls src={gen.audioUrl} className="w-full" />
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </aside>
+        <GenerationsSidebar 
+          generations={generations}
+          onDelete={deleteGeneration}
+          onUseSynthesizer={handleUseSynthesizer}
+        />
       </div>
     </div>
   );
