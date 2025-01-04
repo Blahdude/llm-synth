@@ -284,22 +284,14 @@ const MusicGenInterface = () => {
     }
   };
 
-  const handleUseSynthesizer = async (generationId) => {
-    try {
-      const generation = generations.find(gen => gen.id === generationId);
-      if (!generation) {
-        throw new Error('Generation not found');
-      }
-
-      // Store the generation ID and URL for reference
-      localStorage.setItem('selectedAudioForSynth', generationId);
-      localStorage.setItem('selectedAudioUrl', generation.audioUrl);
-      
-      navigate('/synthesize');
-    } catch (error) {
-      console.error('Error preparing audio for synthesizer:', error);
-      setError('Failed to prepare audio for synthesizer');
+  const handleUseSynthesizer = (generationId) => {
+    if (!generationId) {
+      console.error('No generationId provided to handleUseSynthesizer');
+      return;
     }
+    console.log('Navigating to synthesizer with ID:', generationId);
+    console.log('Navigation path:', `/synthesizer/${generationId}`);
+    navigate(`/synthesizer/${generationId}`);
   };
 
   // Clean up URLs when component unmounts
@@ -321,7 +313,7 @@ const MusicGenInterface = () => {
 
   return (
     <div className="min-h-screen bg-[#2C3E50] flex">
-      <Layout />
+      <Layout handleLogout={handleLogout} currentUser={currentUser} />
       {/* Mobile sidebar toggle button */}
       <button
         onClick={() => setIsSidebarOpen(!isSidebarOpen)}

@@ -11,6 +11,7 @@ function App() {
         <Route path="/" element={<MusicGenInterface />} />
         <Route path="/synthesize" element={<GranularSynth />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/synthesizer/:generationId" element={<GranularSynth />} />
       </Routes>
     </BrowserRouter>
   );

@@ -115,6 +115,22 @@ class DatabaseService {
       request.onerror = () => reject(request.error);
     });
   }
+
+  async getGeneration(generationId) {
+    try {
+      const docRef = doc(db, 'generations', generationId);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        return { id: docSnap.id, ...docSnap.data() };
+      } else {
+        return null;
+      }
+    } catch (error) {
+      console.error('Error fetching generation:', error);
+      throw error;
+    }
+  }
 }
 
 export const dbService = new DatabaseService(); 

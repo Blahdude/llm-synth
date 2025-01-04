@@ -1,8 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { dbService } from '../services/DatabaseService';
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { auth, db, storage } from '../firebase';
 import Layout from './Layout';
+import { useParams } from 'react-router-dom';
 
 const GranularSynth = () => {
+  const { generationId } = useParams();
+  console.log('URL Parameter generationId:', generationId);
   const [error, setError] = useState(null);
   const [audioBuffer, setAudioBuffer] = useState(null);
   const canvasRef = useRef(null);
@@ -232,37 +236,60 @@ const GranularSynth = () => {
   // Update the effect that loads selected audio
   useEffect(() => {
     const loadSelectedAudio = async () => {
-      const selectedAudioId = localStorage.getItem('selectedAudioForSynth');
-      if (selectedAudioId && currentUser) {
-        try {
-          console.log('Loading audio data from database:', selectedAudioId);
-          const audioData = await dbService.getAudioFile(selectedAudioId);
-          if (!audioData || !audioData.audioBlob) {
-            throw new Error('Audio data not found');
-          }
+      if (!generationId) {
+        console.log('No generationId found, returning early');
+        return;
+      }
 
-          if (!audioContextRef.current) {
-            audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
-          }
-
-          const audioBuffer = await audioContextRef.current.decodeAudioData(
-            await audioData.audioBlob.arrayBuffer()
-          );
-          
-          setAudioBuffer(audioBuffer);
-          drawWaveform(audioBuffer);
-          
-          // Clear the selection after successful load
-          localStorage.removeItem('selectedAudioForSynth');
-        } catch (err) {
-          console.error("Error loading selected audio:", err);
-          setError("Failed to load selected audio");
+      try {
+        // Get document directly by ID
+        const docRef = doc(db, 'generatedAudio', generationId);
+        console.log('Attempting to fetch document with ID:', generationId);
+        
+        const docSnap = await getDoc(docRef);
+        
+        if (!docSnap.exists()) {
+          console.log('No generation found with this ID');
+          setError('Generation not found');
+          return;
         }
+
+        const generationData = {
+          id: docSnap.id,
+          ...docSnap.data()
+        };
+        
+        console.log('Generation Data:', generationData);
+
+        // Modified fetch request
+        const response = await fetch(generationData.audioUrl, {
+          headers: {
+            'Accept': 'audio/*'
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch audio file: ${response.status} ${response.statusText}`);
+        }
+        
+        const arrayBuffer = await response.arrayBuffer();
+        
+        if (!audioContextRef.current) {
+          audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+        }
+
+        const audioBuffer = await audioContextRef.current.decodeAudioData(arrayBuffer);
+        console.log('Successfully loaded audio buffer');
+        setAudioBuffer(audioBuffer);
+        drawWaveform(audioBuffer);
+      } catch (err) {
+        console.error("Error loading selected audio:", err);
+        setError(`Failed to load selected audio: ${err.message}`);
       }
     };
 
     loadSelectedAudio();
-  }, [currentUser]);
+  }, [generationId]);
 
   // Add cleanup for component unmount
   useEffect(() => {

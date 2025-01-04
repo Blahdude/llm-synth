@@ -52,7 +52,7 @@ const LoginPage = ({ onLogin }) => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="Enter your email"
-              className="w-full px-4 py-2 text-white rounded-xl focus:border-color-white/10 focus:ring-2 focus:ring-white/10 focus:outline-none"
+              className="w-full px-4 py-2 text-blue rounded-xl focus:border-color-white/10 focus:ring-2 focus:ring-white/10 focus:outline-none"
             />
 
             <input
@@ -60,7 +60,7 @@ const LoginPage = ({ onLogin }) => {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter your password"
-              className="w-full px-4 py-2 text-white rounded-xl focus:border-color-white/10 focus:ring-2 focus:ring-white/10 focus:outline-none"
+              className="w-full px-4 py-2 text-blue rounded-xl focus:border-color-white/10 focus:ring-2 focus:ring-white/10 focus:outline-none"
             />
 
             <button
