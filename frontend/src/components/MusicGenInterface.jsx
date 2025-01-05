@@ -312,82 +312,87 @@ const MusicGenInterface = () => {
     <div className="min-h-screen bg-[#2C3E50]">
       <Layout handleLogout={handleLogout} currentUser={currentUser} />
 
-      <div className="grid grid-cols-1 md:grid-cols-[1fr,320px] gap-4 p-4">
-        <div className="mx-auto w-full max-w-3xl flex flex-col items-center justify-center gap-6">
-          <div className="w-full space-y-2">
-            <label className="block text-xl font-medium font-merriweather text-[#F2E6D8]">
+      <div className="flex">
+        <div className="ml-[0rem] w-[37.5rem] min-h-screen">
+          <div className="w-full flex flex-col p-4">
+            <h1 className="text-xl text-[#F2E6D8] font-normal mb-4">
               Tell me what kind of music to create
-            </label>
+            </h1>
+            
             <textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               placeholder="Describe the music you want to generate..."
-              className="w-full h-24 px-4 py-3 text-black border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-colors resize-none bg-gray-50"
+              className="w-full h-32 px-4 py-3 text-lg text-black border border-gray-200 rounded-2xl focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-colors resize-none bg-gray-50"
               disabled={isLoading}
             />
-          </div>
 
-          <div className="w-full space-y-2">
-            <div className="flex justify-between">
-              <label className="text-lg font-medium font-merriweather text-[#F2E6D8]">
-                Duration
-              </label>
-              <span className="text-[#F2E6D8] font-medium font-merriweather">
-                {duration} seconds
-              </span>
+            <div className="w-full mt-4 space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-lg text-[#F2E6D8] font-normal">
+                  Duration
+                </span>
+                <span className="text-lg text-[#F2E6D8] font-normal">
+                  {duration} seconds
+                </span>
+              </div>
+              <input
+                type="range"
+                min="1"
+                max="30"
+                value={duration}
+                onChange={(e) => setDuration(Number(e.target.value))}
+                className="w-full h-2 bg-blue-200 rounded-lg appearance-none cursor-pointer"
+                disabled={isLoading}
+              />
             </div>
-            <input
-              type="range"
-              min="1"
-              max="30"
-              value={duration}
-              onChange={(e) => setDuration(Number(e.target.value))}
-              className="w-full h-2 bg-blue-200 rounded-lg appearance-none cursor-pointer"
-              disabled={isLoading}
-            />
-          </div>
 
-          <button
-            onClick={handleGenerate}
-            disabled={isLoading || !prompt}
-            className={`w-64 py-4 px-6 rounded-xl flex items-center justify-center gap-2 text-[#F2E6D8] font-medium font-merriweather text-lg transition hover:bg-[#2F4F4F]
-              ${
-                isLoading || !prompt
-                  ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-blue-600 hover:bg-blue-700 transform hover:-translate-y-0.5'
-              }`}
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="animate-spin h-5 w-5" />
-                Generating...
-              </>
-            ) : (
-              <>
-                <Music2 className="h-5 w-5" />
-                Generate Music
-              </>
+            <button
+              onClick={handleGenerate}
+              disabled={isLoading || !prompt}
+              className={`w-full mt-4 py-3 px-4 rounded-full flex items-center justify-center gap-2 text-[#F2E6D8] font-medium text-lg transition
+                ${
+                  isLoading || !prompt
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-blue-600 hover:bg-blue-700'
+                }`}
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="animate-spin h-5 w-5" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Music2 className="h-5 w-5" />
+                  Generate Music
+                </>
+              )}
+            </button>
+
+            {audioUrl && !isLoading && (
+              <div className="w-full mt-4">
+                <audio ref={audioRef} controls className="w-full" src={audioUrl} />
+              </div>
             )}
-          </button>
 
-          {audioUrl && !isLoading && (
-            <div className="w-full">
-              <audio ref={audioRef} controls className="w-full" src={audioUrl} />
-            </div>
-          )}
-
-          {error && (
-            <div className="p-3 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm">
-              {error}
-            </div>
-          )}
+            {error && (
+              <div className="mt-4 p-3 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm">
+                {error}
+              </div>
+            )}
+          </div>
         </div>
 
-        <GenerationsSidebar 
-          generations={generations}
-          onDelete={deleteGeneration}
-          onUseSynthesizer={handleUseSynthesizer}
-        />
+        <div className="fixed right-0 top-0 h-full w-[22rem]">
+          <div className="h-[calc(107vh-4rem)] pt-4 px-4">
+            <GenerationsSidebar 
+              generations={generations}
+              onDelete={deleteGeneration}
+              onUseSynthesizer={handleUseSynthesizer}
+            />
+          </div>
+        </div>
       </div>
     </div>
   );
