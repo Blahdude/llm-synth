@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { Music2 } from 'lucide-react';
-import { auth, db, storage } from '../firebase';  // if in components folder
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
+import { auth, db } from '../firebase';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
 
 const LoginPage = ({ onLogin }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [username, setUsername] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
   const [error, setError] = useState('');
 
@@ -15,11 +17,30 @@ const LoginPage = ({ onLogin }) => {
       return;
     }
 
+    if (isRegistering && !username.trim()) {
+      setError('Please enter a username');
+      return;
+    }
+
     try {
       let userCredential;
       
       if (isRegistering) {
+        // Create new user
         userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        
+        // Update profile with username
+        await updateProfile(userCredential.user, {
+          displayName: username
+        });
+
+        // Store additional user data in Firestore
+        await setDoc(doc(db, 'users', userCredential.user.uid), {
+          username: username,
+          email: email,
+          createdAt: new Date()
+        });
+
       } else {
         userCredential = await signInWithEmailAndPassword(auth, email, password);
       }
@@ -27,7 +48,8 @@ const LoginPage = ({ onLogin }) => {
       const user = userCredential.user;
       onLogin({
         uid: user.uid,
-        email: user.email
+        email: user.email,
+        username: user.displayName || username
       });
       
     } catch (error) {
@@ -47,6 +69,16 @@ const LoginPage = ({ onLogin }) => {
         
         <div className="bg-[#2C3E50] rounded-xl overflow-hidden">
           <div className="p-6 space-y-4">
+            {isRegistering && (
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Choose a username"
+                className="w-full px-4 py-2 text-blue rounded-xl focus:border-color-white/10 focus:ring-2 focus:ring-white/10 focus:outline-none"
+              />
+            )}
+
             <input
               type="email"
               value={email}
@@ -71,7 +103,11 @@ const LoginPage = ({ onLogin }) => {
             </button>
 
             <button
-              onClick={() => setIsRegistering(!isRegistering)}
+              onClick={() => {
+                setIsRegistering(!isRegistering);
+                setError('');
+                setUsername('');
+              }}
               className="w-full py-3 px-4 text-[#F2E6D8] text-sm hover:underline"
             >
               {isRegistering ? 'Already have an account? Login' : "Don't have an account? Register"}

@@ -6,6 +6,10 @@ from transformers import AutoProcessor, MusicgenForConditionalGeneration
 import scipy.io.wavfile
 import io
 from fastapi.responses import StreamingResponse
+import base64
+from PIL import Image
+import os
+import gc  # Add garbage collection
 
 app = FastAPI()
 
@@ -24,19 +28,23 @@ print("Loading MusicGen model...")
 processor = AutoProcessor.from_pretrained("facebook/musicgen-small")
 model = MusicgenForConditionalGeneration.from_pretrained("facebook/musicgen-small")
 
-if torch.cuda.is_available():
-    model = model.to("cuda")
-    print("Using CUDA for generation")
-else:
-    print("Using CPU for generation - this may be slow")
-
 class MusicRequest(BaseModel):
     prompt: str
     duration: int = 10
+    model: str = "facebook/musicgen-small"
 
 @app.post("/generate")
 async def generate_music(request: MusicRequest):
     print(f"Starting generation with prompt: {request.prompt}")
+    print(f"Using model: {request.model}")
+    
+    # Load the requested model
+    processor = AutoProcessor.from_pretrained(request.model)
+    model = MusicgenForConditionalGeneration.from_pretrained(request.model)
+    
+    if torch.cuda.is_available():
+        model = model.to("cuda")
+    
     print(f"Requested duration: {request.duration} seconds")
 
     # Process the input prompt

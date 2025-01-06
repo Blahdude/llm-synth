@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Loader2, Music2, User, LogOut, History, Trash2, Menu, Home, Settings } from 'lucide-react';
+import { Loader2, Music2, User, LogOut, History, Trash2, Menu, Home, Settings, Play, Pause, Volume2, Image } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { auth, db, storage } from '../firebase';  // if in components folder
 import { onAuthStateChanged, getAuth } from 'firebase/auth';
@@ -8,6 +8,24 @@ import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage
 import LoginPage from './LoginPage';
 import Layout from './Layout';
 import GenerationsSidebar from './GenerationsSidebar';
+
+const AVAILABLE_MODELS = [
+  { 
+    id: "facebook/musicgen-small", 
+    name: "MusicGen Small",
+    description: "Faster generation, lighter model" 
+  },
+  { 
+    id: "facebook/musicgen-medium", 
+    name: "MusicGen Medium",
+    description: "Better quality, slower generation" 
+  },
+  { 
+    id: "facebook/musicgen-large", 
+    name: "MusicGen Large",
+    description: "Best quality, slowest generation" 
+  }
+];
 
 const MusicGenInterface = () => {
   console.log('MusicGenInterface rendering');
@@ -40,6 +58,14 @@ const MusicGenInterface = () => {
   // Add state for authentication
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
+  // Add state for audio player
+  const [isAudioPlaying, setIsAudioPlaying] = useState(false);
+  const [audioCurrentTime, setAudioCurrentTime] = useState(0);
+  const [audioLength, setAudioLength] = useState(0);
+
+  // Add state for selected model
+  const [selectedModel, setSelectedModel] = useState(AVAILABLE_MODELS[0].id);
+
   // Replace localStorage useEffect with Firebase auth listener
   useEffect(() => {
     const auth = getAuth();
@@ -50,8 +76,9 @@ const MusicGenInterface = () => {
       if (user) {
         setIsAuthenticated(true);
         const userData = {
-          username: user.displayName || user.email,
-          uid: user.uid
+          username: user.displayName,
+          uid: user.uid,
+          email: user.email
         };
         setCurrentUser(userData);
         loadUserGenerations(user.uid);
@@ -168,11 +195,14 @@ const MusicGenInterface = () => {
       // Create the generation document
       const generationDoc = {
         userId: currentUser.uid,
+        username: currentUser.username || currentUser.displayName || 'Anonymous',
         prompt: generationData.prompt,
         duration: parseInt(generationData.duration),
         timestamp: Timestamp.now(),
         audioPath: `audio/${filename}`,
-        audioUrl: downloadURL
+        audioUrl: downloadURL,
+        imageUrl: generationData.imageUrl,
+        model: selectedModel
       };
 
       console.log('Generation doc to save:', generationDoc);
@@ -238,8 +268,8 @@ const MusicGenInterface = () => {
     setError('');
     
     try {
-      console.log('Starting generation with prompt:', prompt);
-      const response = await fetch('http://localhost:8000/generate', {
+      // Generate music
+      const musicResponse = await fetch('http://localhost:8000/generate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -247,25 +277,23 @@ const MusicGenInterface = () => {
         body: JSON.stringify({
           prompt,
           duration: parseInt(duration),
+          model: selectedModel
         }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.text();
-        throw new Error(`Failed to generate music: ${errorData}`);
+      if (!musicResponse.ok) {
+        throw new Error('Failed to generate music');
       }
 
-      const audioBlob = await response.blob();
-      console.log('Received audio blob:', audioBlob);
-
+      const audioBlob = await musicResponse.blob();
       const wavFile = new File([audioBlob], 'generated_music.wav', {
         type: 'audio/wav'
       });
-      console.log('Created WAV file:', wavFile);
 
       const tempUrl = URL.createObjectURL(wavFile);
       setAudioUrl(tempUrl);
 
+      // Save audio only
       await saveGeneration({
         prompt,
         duration,
@@ -298,6 +326,37 @@ const MusicGenInterface = () => {
     };
   }, [generationUrls]);
 
+  // Add handlers for audio player
+  const handlePlayPause = () => {
+    if (isAudioPlaying) {
+      audioRef.current.pause();
+    } else {
+      audioRef.current.play();
+    }
+    setIsAudioPlaying(!isAudioPlaying);
+  };
+
+  const handleTimeUpdate = () => {
+    setAudioCurrentTime(audioRef.current.currentTime);
+  };
+
+  const handleLoadedMetadata = () => {
+    setAudioLength(audioRef.current.duration);
+  };
+
+  const handleSeek = (e) => {
+    const time = (e.target.value / 100) * audioLength;
+    audioRef.current.currentTime = time;
+    setAudioCurrentTime(time);
+  };
+
+  // Format time function
+  const formatTime = (time) => {
+    const minutes = Math.floor(time / 60);
+    const seconds = Math.floor(time % 60);
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
+
   // Login Screen
   if (!isAuthenticated) {
     return <LoginPage />;
@@ -310,82 +369,149 @@ const MusicGenInterface = () => {
 
   return (
     <div className="min-h-screen bg-[#2C3E50]">
-      <Layout handleLogout={handleLogout} currentUser={currentUser} />
+      <Layout currentUser={currentUser} handleLogout={handleLogout} />
 
       <div className="flex">
-        <div className="ml-[0rem] w-[37.5rem] min-h-screen">
-          <div className="w-full flex flex-col p-4">
-            <h1 className="text-xl text-[#F2E6D8] font-normal mb-4">
+        <div className="ml-[-11rem] w-[41rem] min-h-screen border-r border-white/10">
+          <div className="w-full flex flex-col p-5">
+            <h2 className="text-2xl mb-5 text-[#F2E6D8]">
               Tell me what kind of music to create
-            </h1>
-            
+            </h2>
+
+            <div className="mb-5 flex items-start gap-4">
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-[#F2E6D8]/60 mb-2">
+                  Model
+                </label>
+                <div className="relative">
+                  <select
+                    value={selectedModel}
+                    onChange={(e) => setSelectedModel(e.target.value)}
+                    className="w-full bg-white/5 border border-white/10 text-[#F2E6D8] rounded-xl px-4 py-2.5 appearance-none cursor-pointer hover:bg-white/[0.07] transition-colors"
+                  >
+                    {AVAILABLE_MODELS.map((model) => (
+                      <option key={model.id} value={model.id}>
+                        {model.name}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                    <svg className="h-4 w-4 text-[#F2E6D8]/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
+                <p className="mt-2 text-sm text-[#F2E6D8]/40">
+                  {AVAILABLE_MODELS.find(m => m.id === selectedModel)?.description}
+                </p>
+              </div>
+              
+              <div className="w-48">
+                <label className="block text-sm font-medium text-[#F2E6D8]/60 mb-2">
+                  Duration
+                </label>
+                <input
+                  type="range"
+                  min="1"
+                  max="30"
+                  value={duration}
+                  onChange={(e) => setDuration(parseInt(e.target.value))}
+                  className="w-full accent-[#F2E6D8] h-2 rounded-lg appearance-none cursor-pointer"
+                />
+                <div className="mt-2 text-sm text-[#F2E6D8]/40 text-center">
+                  {duration} seconds
+                </div>
+              </div>
+            </div>
+
             <textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               placeholder="Describe the music you want to generate..."
-              className="w-full h-32 px-4 py-3 text-lg text-black border border-gray-200 rounded-2xl focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none transition-colors resize-none bg-gray-50"
+              className="w-full h-36 px-5 py-4 text-xl bg-white/10 text-[#F2E6D8] border border-white/10 rounded-xl focus:border-white/20 focus:ring-1 focus:ring-white/20 focus:outline-none transition-colors resize-none placeholder:text-[#F2E6D8]/60"
               disabled={isLoading}
             />
-
-            <div className="w-full mt-4 space-y-2">
-              <div className="flex justify-between items-center">
-                <span className="text-lg text-[#F2E6D8] font-normal">
-                  Duration
-                </span>
-                <span className="text-lg text-[#F2E6D8] font-normal">
-                  {duration} seconds
-                </span>
-              </div>
-              <input
-                type="range"
-                min="1"
-                max="30"
-                value={duration}
-                onChange={(e) => setDuration(Number(e.target.value))}
-                className="w-full h-2 bg-blue-200 rounded-lg appearance-none cursor-pointer"
-                disabled={isLoading}
-              />
-            </div>
 
             <button
               onClick={handleGenerate}
               disabled={isLoading || !prompt}
-              className={`w-full mt-4 py-3 px-4 rounded-full flex items-center justify-center gap-2 text-[#F2E6D8] font-medium text-lg transition
-                ${
-                  isLoading || !prompt
-                    ? 'bg-gray-400 cursor-not-allowed'
-                    : 'bg-blue-600 hover:bg-blue-700'
+              className={`w-full mt-5 py-4 px-5 rounded-xl flex items-center justify-center gap-3 text-[#F2E6D8] font-medium text-xl transition-colors
+                ${isLoading || !prompt
+                  ? 'bg-white/10 cursor-not-allowed'
+                  : 'bg-white/10 hover:bg-white/20'
                 }`}
             >
               {isLoading ? (
                 <>
-                  <Loader2 className="animate-spin h-5 w-5" />
+                  <Loader2 className="animate-spin h-6 w-6" />
                   Generating...
                 </>
               ) : (
                 <>
-                  <Music2 className="h-5 w-5" />
+                  <Music2 className="h-6 w-6" />
                   Generate Music
                 </>
               )}
             </button>
 
             {audioUrl && !isLoading && (
-              <div className="w-full mt-4">
-                <audio ref={audioRef} controls className="w-full" src={audioUrl} />
+              <div className="w-full mt-5 p-4 bg-white/5 rounded-xl border border-white/10">
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-[#F2E6D8]/60">Preview</span>
+                    <span className="text-sm text-[#F2E6D8]/60">
+                      {formatTime(audioCurrentTime)} / {formatTime(audioLength)}
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center gap-4">
+                    <button
+                      onClick={handlePlayPause}
+                      className="p-2 rounded-full bg-[#F2E6D8] hover:bg-[#E5D9CC] transition-colors"
+                    >
+                      {isAudioPlaying ? (
+                        <Pause className="h-4 w-4 text-[#2C3E50]" />
+                      ) : (
+                        <Play className="h-4 w-4 text-[#2C3E50]" />
+                      )}
+                    </button>
+
+                    <div className="flex-1">
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={(audioCurrentTime / audioLength) * 100 || 0}
+                        onChange={handleSeek}
+                        className="w-full accent-[#F2E6D8] h-1.5 rounded-lg appearance-none cursor-pointer bg-white/10"
+                      />
+                    </div>
+
+                    <Volume2 className="h-4 w-4 text-[#F2E6D8]/60" />
+                  </div>
+                </div>
+
+                <audio
+                  ref={audioRef}
+                  src={audioUrl}
+                  onTimeUpdate={handleTimeUpdate}
+                  onLoadedMetadata={handleLoadedMetadata}
+                  onEnded={() => setIsAudioPlaying(false)}
+                  className="hidden"
+                />
               </div>
             )}
 
             {error && (
-              <div className="mt-4 p-3 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm">
+              <div className="mt-5 p-3 bg-red-500 text-white rounded-xl text-lg">
                 {error}
               </div>
             )}
           </div>
         </div>
 
-        <div className="fixed right-0 top-0 h-full w-[22rem]">
-          <div className="h-[calc(107vh-4rem)] pt-4 px-4">
+        <div className="fixed right-0 mr-[3rem] top-0 h-full w-[24rem]">
+          <div className="h-[calc(100vh-4rem)] pt-5 px-5">
             <GenerationsSidebar 
               generations={generations}
               onDelete={deleteGeneration}

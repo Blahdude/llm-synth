@@ -2,10 +2,13 @@ import React, { useEffect, useRef, useState } from 'react';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { auth, db, storage } from '../firebase';
 import Layout from './Layout';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
+import GenerationsSidebar from './GenerationsSidebar';
+import { onAuthStateChanged } from 'firebase/auth';
 
 const GranularSynth = () => {
   const { generationId } = useParams();
+  const navigate = useNavigate();
   console.log('URL Parameter generationId:', generationId);
   const [error, setError] = useState(null);
   const [audioBuffer, setAudioBuffer] = useState(null);
@@ -29,12 +32,28 @@ const GranularSynth = () => {
   // Add state for current user
   const [currentUser, setCurrentUser] = useState(null);
 
+  // Add state for generations
+  const [generations, setGenerations] = useState([]);
+
+  // Add state for filename
+  const [audioFileName, setAudioFileName] = useState(null);
+
   // Add effect to check current user
   useEffect(() => {
-    const savedUser = localStorage.getItem('currentUser');
-    if (savedUser) {
-      setCurrentUser(JSON.parse(savedUser));
-    }
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        const userData = {
+          username: user.displayName || user.email,
+          uid: user.uid,
+          email: user.email
+        };
+        setCurrentUser(userData);
+      } else {
+        setCurrentUser(null);
+      }
+    });
+
+    return () => unsubscribe();
   }, []);
 
   // Grain creation with spread and pan
@@ -58,7 +77,9 @@ const GranularSynth = () => {
     const duration = attack + release;
     const randomOffset = (Math.random() * spread * 2) - spread;
     const offset = ((positionX / canvasRef.current.width) * audioBuffer.duration) + randomOffset;
-    const amplitude = 1 - (positionY / canvasRef.current.height);
+    
+    // Use fixed amplitude instead of Y-based
+    const amplitude = 1.0;
     
     // Random pan based on pan parameter
     const randomPan = (Math.random() * pan * 2) - pan;
@@ -223,6 +244,7 @@ const GranularSynth = () => {
     if (!file) return;
 
     try {
+      setAudioFileName(file.name); // Store filename
       const arrayBuffer = await file.arrayBuffer();
       const audioBuffer = await audioContextRef.current.decodeAudioData(arrayBuffer);
       setAudioBuffer(audioBuffer);
@@ -242,10 +264,7 @@ const GranularSynth = () => {
       }
 
       try {
-        // Get document directly by ID
         const docRef = doc(db, 'generatedAudio', generationId);
-        console.log('Attempting to fetch document with ID:', generationId);
-        
         const docSnap = await getDoc(docRef);
         
         if (!docSnap.exists()) {
@@ -259,8 +278,8 @@ const GranularSynth = () => {
           ...docSnap.data()
         };
         
-        console.log('Generation Data:', generationData);
-
+        setAudioFileName(generationData.prompt || 'Generated Audio');
+        
         // Modified fetch request
         const response = await fetch(generationData.audioUrl, {
           headers: {
@@ -345,151 +364,206 @@ const GranularSynth = () => {
     };
   }, []);
 
+  // Add functions to handle generations
+  const deleteGeneration = async (id) => {
+    // Implementation for deleting generations
+  };
+
+  const handleUseSynthesizer = (id) => {
+    // If we're already looking at this generation, do nothing
+    if (id === generationId) {
+      return;
+    }
+    
+    // Otherwise, navigate to the new generation
+    navigate(`/synthesizer/${id}`);
+  };
+
+  // Add useEffect to fetch generations
+  useEffect(() => {
+    const fetchGenerations = async () => {
+      if (!currentUser?.uid) return;
+      
+      try {
+        const q = query(
+          collection(db, 'generatedAudio'),
+          where('userId', '==', currentUser.uid)
+        );
+        const querySnapshot = await getDocs(q);
+        const fetchedGenerations = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        setGenerations(fetchedGenerations);
+      } catch (error) {
+        console.error("Error fetching generations:", error);
+      }
+    };
+
+    fetchGenerations();
+  }, [currentUser]);
+
+  const handleLogout = async () => {
+    try {
+      await auth.signOut();
+      localStorage.removeItem('currentUser');
+      window.location.href = '/';
+    } catch (error) {
+      console.error('Error logging out:', error);
+    }
+  };
+
   return (
-    <div className="text-white">
-      <Layout />
-      <h2 className="text-xl mb-4">Granular Synthesizer</h2>
-      
-      {/* Styled file input */}
-      <div className="mb-4">
-        <label className="relative inline-block">
-          <span className="bg-[#F2E6D8] text-[#2C3E50] px-4 py-2 rounded cursor-pointer hover:bg-[#E5D9CC] transition-colors duration-200">
-            Choose Audio File
-          </span>
-          <input
-            type="file"
-            accept="audio/*"
-            onChange={handleFileUpload}
-            className="hidden"
-          />
-        </label>
-        {audioBuffer && (
-          <span className="ml-3 text-[#F2E6D8] text-sm">
-            File loaded successfully
-          </span>
-        )}
-      </div>
-      
-      <div className="relative w-full h-64 mb-4 bg-black border border-gray-500">
-        <canvas 
-          ref={canvasRef}
-          className="absolute top-0 left-0 w-full h-full border border-blue-500 cursor-pointer touch-action-none"
-          style={{ 
-            pointerEvents: 'auto', 
-            touchAction: 'none',
-            WebkitTouchCallout: 'none',
-            WebkitUserSelect: 'none',
-            KhtmlUserSelect: 'none',
-            MozUserSelect: 'none',
-            msUserSelect: 'none',
-            userSelect: 'none'
-          }}
-          width={800}
-          height={400}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerLeave={handlePointerUp}
-          onPointerCancel={handlePointerUp}
-        />
-        <canvas 
-          ref={canvas2Ref}
-          className="absolute top-0 left-0 w-full h-full border border-[#F2E6D8] pointer-events-none"
-          width={800}
-          height={400}
-        />
-      </div>
+    <div className="min-h-screen bg-[#2C3E50]">
+      <Layout 
+        currentUser={currentUser} 
+        handleLogout={handleLogout}
+      />
 
-      <div className="grid grid-cols-3 gap-4 mb-4">
-        <div>
-          <label className="block mb-2">Attack ({(attack * 100).toFixed(0)})</label>
-          <input 
-            type="range" 
-            min="1" 
-            max="100" 
-            value={attack * 100}
-            onChange={(e) => setAttack(e.target.value / 100)}
-            className="w-full accent-[#F2E6D8]"
-          />
-        </div>
-        <div>
-          <label className="block mb-2">Release ({(release * 100).toFixed(0)})</label>
-          <input 
-            type="range" 
-            min="1" 
-            max="100" 
-            value={release * 100}
-            onChange={(e) => setRelease(e.target.value / 100)}
-            className="w-full accent-[#F2E6D8]"
-          />
-        </div>
-        <div>
-          <label className="block mb-2">Density ({(density * 100).toFixed(0)})</label>
-          <input 
-            type="range" 
-            min="0" 
-            max="100" 
-            value={density * 100}
-            onChange={(e) => setDensity(e.target.value / 100)}
-            className="w-full accent-[#F2E6D8]"
-          />
-        </div>
-      </div>
+      <div className="flex">
+        <div className="ml-[-11rem] w-[41rem] min-h-screen border-r border-white/10">
+          <div className="w-full flex flex-col p-5">
+            <div className="w-full mb-5 bg-white/5 rounded-xl p-4 border border-white/10">
+              <h2 className="text-lg font-medium text-[#F2E6D8]/80">Granular Synthesizer</h2>
+              {!audioFileName && (
+                <p className="mt-1 text-xl text-[#F2E6D8]/80 line-clamp-2 leading-tight">
+                  Upload a waveform from the right. Click and drag on the waveform to create grains of sound. Adjust parameters below as desired.
+                </p>
+              )}
+            </div>
+            
+            {/* Canvas container */}
+            <div className="relative w-full h-36 mb-5 rounded-xl overflow-hidden bg-white/10 border border-white/10">
+              <canvas 
+                ref={canvasRef}
+                className="absolute top-0 left-0 w-full h-full cursor-pointer touch-action-none"
+                style={{ 
+                  pointerEvents: 'auto', 
+                  touchAction: 'none',
+                  WebkitTouchCallout: 'none',
+                  WebkitUserSelect: 'none',
+                  KhtmlUserSelect: 'none',
+                  MozUserSelect: 'none',
+                  msUserSelect: 'none',
+                  userSelect: 'none'
+                }}
+                width={800}
+                height={400}
+                onPointerDown={handlePointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                onPointerLeave={handlePointerUp}
+                onPointerCancel={handlePointerUp}
+              />
+              <canvas 
+                ref={canvas2Ref}
+                className="absolute top-0 left-0 w-full h-full pointer-events-none"
+                width={800}
+                height={400}
+              />
+            </div>
 
-      <div className="grid grid-cols-3 gap-4 mb-4">
-        <div>
-          <label className="block mb-2">Spread ({(spread * 100).toFixed(0)})</label>
-          <input 
-            type="range" 
-            min="0" 
-            max="100" 
-            value={spread * 100}
-            onChange={(e) => setSpread(e.target.value / 100)}
-            className="w-full accent-[#F2E6D8]"
-          />
-        </div>
-        <div>
-          <label className="block mb-2">Pan ({(pan * 100).toFixed(0)})</label>
-          <input 
-            type="range" 
-            min="0" 
-            max="100" 
-            value={pan * 100}
-            onChange={(e) => setPan(e.target.value / 100)}
-            className="w-full accent-[#F2E6D8]"
-          />
-        </div>
-        <div>
-          <label className="block mb-2">Transpose ({transpose.toFixed(2)}x)</label>
-          <div className="flex gap-2">
-            <button 
-              onClick={handleTransposeDown}
-              className="flex-1 bg-[#1a2733] hover:bg-[#1a2733] text-white py-2 px-4 rounded"
-            >
-              -12
-            </button>
-            <button 
-              onClick={handleTransposeUp}
-              className="flex-1 bg-[#1a2733] hover:bg-[#1a2733] text-white py-2 px-4 rounded"
-            >
-              +12
-            </button>
+            {/* File input moved below canvas */}
+            <div className="mb-6 flex items-center gap-4">
+              <div>
+                <label className="relative inline-block">
+                  <span className="bg-[#F2E6D8] text-[#2C3E50] px-6 py-2.5 rounded-lg font-medium cursor-pointer hover:bg-[#E5D9CC] transition-colors duration-200">
+                    Choose Audio File
+                  </span>
+                  <input
+                    type="file"
+                    accept="audio/*"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+              {audioFileName && (
+                <div className="flex-1 text-[#F2E6D8] text-sm font-medium px-4 py-2 bg-white/5 rounded-lg">
+                  <p className="break-words">
+                    {audioFileName}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Rest of your controls */}
+            <div className="bg-black/10 p-6 rounded-xl border border-[#F2E6D8]/10">
+              <div className="grid grid-cols-3 gap-6">
+                <div className="space-y-2">
+                  <label className="block text-[#F2E6D8]/80 text-sm font-medium">
+                    Attack
+                    <span className="ml-2 text-[#F2E6D8]/60">
+                      {(attack * 100).toFixed(0)}%
+                    </span>
+                  </label>
+                  <input 
+                    type="range" 
+                    min="1" 
+                    max="100" 
+                    value={attack * 100}
+                    onChange={(e) => setAttack(e.target.value / 100)}
+                    className="w-full accent-[#F2E6D8] h-2 rounded-lg appearance-none cursor-pointer"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-[#F2E6D8]/80 text-sm font-medium">
+                    Release
+                    <span className="ml-2 text-[#F2E6D8]/60">
+                      {(release * 100).toFixed(0)}%
+                    </span>
+                  </label>
+                  <input 
+                    type="range" 
+                    min="1" 
+                    max="100" 
+                    value={release * 100}
+                    onChange={(e) => setRelease(e.target.value / 100)}
+                    className="w-full accent-[#F2E6D8] h-2 rounded-lg appearance-none cursor-pointer"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-[#F2E6D8]/80 text-sm font-medium">
+                    Density
+                    <span className="ml-2 text-[#F2E6D8]/60">
+                      {(density * 100).toFixed(0)}%
+                    </span>
+                  </label>
+                  <input 
+                    type="range" 
+                    min="0" 
+                    max="100" 
+                    value={density * 100}
+                    onChange={(e) => setDensity(e.target.value / 100)}
+                    className="w-full accent-[#F2E6D8] h-2 rounded-lg appearance-none cursor-pointer"
+                  />
+                </div>
+              </div>
+
+              {error && (
+                <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg text-sm">
+                  {error}
+                </div>
+              )}
+
+              <div className="mt-4 text-sm text-[#F2E6D8]/40 space-y-1">
+                <div>Status: {audioBuffer ? 'Audio Loaded' : 'Waiting for Audio'}</div>
+                <div>Playback: {isPlaying ? 'Active' : 'Inactive'}</div>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
 
-      {error && (
-        <div className="mt-4 p-2 bg-red-500 text-white rounded">
-          Error: {error}
+        <div className="fixed right-0 mr-[3rem] top-0 h-full w-[24rem]">
+          <div className="h-[calc(100vh-4rem)] pt-5 px-5">
+            <GenerationsSidebar 
+              generations={generations}
+              onDelete={deleteGeneration}
+              onUseSynthesizer={handleUseSynthesizer}
+              currentGenerationId={generationId}
+            />
+          </div>
         </div>
-      )}
-
-      <div className="mt-4 text-sm text-gray-400">
-        Audio Context: {audioContextRef.current ? 'Initialized' : 'Not initialized'}
-        <br />
-        Audio Buffer: {audioBuffer ? 'Loaded' : 'Not loaded'}
-        <br />
-        Playing: {isPlaying ? 'Yes' : 'No'}
       </div>
     </div>
   );
