@@ -57,7 +57,18 @@ const GenerationsSidebar = ({ generations, onDelete }) => {
                 className="p-4 rounded-lg border border-white/10 bg-white/5 hover:bg-white/[0.07] transition-all"
               >
                 <div className="space-y-3">
-                  {/* Header with play button and duration */}
+                  {/* Generated Image */}
+                  {gen.imageUrl && (
+                    <div className="w-24 h-24 rounded-lg overflow-hidden bg-black/20 mx-auto">
+                      <img 
+                        src={gen.imageUrl} 
+                        alt="Generated artwork"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  )}
+
+                  {/* Audio Controls and Duration */}
                   <div className="flex items-center gap-3">
                     {gen.audioUrl && (
                       <>

@@ -66,6 +66,9 @@ const MusicGenInterface = () => {
   // Add state for selected model
   const [selectedModel, setSelectedModel] = useState(AVAILABLE_MODELS[0].id);
 
+  // Add state for image URL
+  const [imageUrl, setImageUrl] = useState(null);
+
   // Replace localStorage useEffect with Firebase auth listener
   useEffect(() => {
     const auth = getAuth();
@@ -175,22 +178,23 @@ const MusicGenInterface = () => {
         throw new Error('User not authenticated');
       }
 
-      console.log('Starting save generation process...', generationData);
-      console.log('Current user:', currentUser);
-
       const timestamp = new Date().getTime();
-      const filename = `audio_${currentUser.uid}_${timestamp}.wav`;
+      const audioFilename = `audio_${currentUser.uid}_${timestamp}.wav`;
+      const imageFilename = `image_${currentUser.uid}_${timestamp}.png`;
       
-      // Create a reference to Firebase Storage
-      const storageRef = ref(storage, `audio/${filename}`);
+      // Upload both files to Firebase Storage
+      const audioStorageRef = ref(storage, `audio/${audioFilename}`);
+      const imageStorageRef = ref(storage, `images/${imageFilename}`);
 
-      // Upload the audio file to Firebase Storage
-      const uploadResult = await uploadBytes(storageRef, generationData.wavFile);
-      console.log('Audio uploaded successfully', uploadResult);
+      const [audioUpload, imageUpload] = await Promise.all([
+        uploadBytes(audioStorageRef, generationData.wavFile),
+        uploadBytes(imageStorageRef, generationData.imageFile)
+      ]);
 
-      // Get the download URL
-      const downloadURL = await getDownloadURL(uploadResult.ref);
-      console.log('Got download URL:', downloadURL);
+      const [audioUrl, imageUrl] = await Promise.all([
+        getDownloadURL(audioUpload.ref),
+        getDownloadURL(imageUpload.ref)
+      ]);
 
       // Create the generation document
       const generationDoc = {
@@ -199,32 +203,17 @@ const MusicGenInterface = () => {
         prompt: generationData.prompt,
         duration: parseInt(generationData.duration),
         timestamp: Timestamp.now(),
-        audioPath: `audio/${filename}`,
-        audioUrl: downloadURL,
-        imageUrl: generationData.imageUrl,
+        audioPath: `audio/${audioFilename}`,
+        audioUrl: audioUrl,
+        imagePath: `images/${imageFilename}`,
+        imageUrl: imageUrl,
         model: selectedModel
       };
 
-      console.log('Generation doc to save:', generationDoc);
+      const generationsRef = collection(db, 'generatedAudio');
+      const docRef = await addDoc(generationsRef, generationDoc);
 
-      try {
-        // Changed collection name here
-        const generationsRef = collection(db, 'generatedAudio');
-        const docRef = await addDoc(generationsRef, generationDoc);
-        console.log('Saved to Firestore with ID:', docRef.id);
-
-        // Update local state with new generation
-        const newGeneration = {
-          ...generationDoc,
-          id: docRef.id
-        };
-        
-        setGenerations(prev => [...prev, newGeneration]);
-        console.log('Local state updated');
-      } catch (firestoreError) {
-        console.error('Specific Firestore error:', firestoreError);
-        throw new Error(`Firestore save failed: ${firestoreError.message}`);
-      }
+      setGenerations(prev => [...prev, { ...generationDoc, id: docRef.id }]);
 
     } catch (error) {
       console.error('Error in saveGeneration:', error);
@@ -266,39 +255,57 @@ const MusicGenInterface = () => {
 
     setIsLoading(true);
     setError('');
+    setImageUrl(null); // Reset image when starting new generation
     
     try {
-      // Generate music
-      const musicResponse = await fetch('http://localhost:8000/generate', {
+      const requestBody = {
+        prompt,
+        duration: parseInt(duration) || 10,
+        model: selectedModel
+      };
+
+      const response = await fetch('http://localhost:8000/generate', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          prompt,
-          duration: parseInt(duration),
-          model: selectedModel
-        }),
+        body: JSON.stringify(requestBody)
       });
 
-      if (!musicResponse.ok) {
-        throw new Error('Failed to generate music');
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to generate content: ${errorText}`);
       }
 
-      const audioBlob = await musicResponse.blob();
-      const wavFile = new File([audioBlob], 'generated_music.wav', {
-        type: 'audio/wav'
-      });
+      const data = await response.json();
+      
+      // Convert base64 to blobs
+      const audioBlob = new Blob(
+        [Uint8Array.from(atob(data.audio), c => c.charCodeAt(0))],
+        { type: 'audio/wav' }
+      );
+      const imageBlob = new Blob(
+        [Uint8Array.from(atob(data.image), c => c.charCodeAt(0))],
+        { type: 'image/png' }
+      );
 
-      const tempUrl = URL.createObjectURL(wavFile);
-      setAudioUrl(tempUrl);
+      // Create files and URLs
+      const wavFile = new File([audioBlob], 'generated_music.wav', { type: 'audio/wav' });
+      const imageFile = new File([imageBlob], 'generated_image.png', { type: 'image/png' });
 
-      // Save audio only
+      const audioUrl = URL.createObjectURL(wavFile);
+      const imgUrl = URL.createObjectURL(imageBlob);
+      
+      setAudioUrl(audioUrl);
+      setImageUrl(imgUrl);  // Set the image URL
+
+      // Save both files
       await saveGeneration({
         prompt,
         duration,
         timestamp: new Date().toISOString(),
-        wavFile
+        wavFile,
+        imageFile
       });
 
     } catch (err) {
@@ -323,8 +330,10 @@ const MusicGenInterface = () => {
   useEffect(() => {
     return () => {
       generationUrls.forEach(url => URL.revokeObjectURL(url));
+      if (audioUrl) URL.revokeObjectURL(audioUrl);
+      if (imageUrl) URL.revokeObjectURL(imageUrl);
     };
-  }, [generationUrls]);
+  }, [generationUrls, audioUrl, imageUrl]);
 
   // Add handlers for audio player
   const handlePlayPause = () => {
@@ -499,6 +508,19 @@ const MusicGenInterface = () => {
                   onEnded={() => setIsAudioPlaying(false)}
                   className="hidden"
                 />
+              </div>
+            )}
+
+            {imageUrl && !isLoading && (
+              <div className="w-full mt-5 p-4 bg-white/5 rounded-xl border border-white/10">
+                <div className="flex flex-col gap-3">
+                  <span className="text-sm font-medium text-[#F2E6D8]/60">Generated Image</span>
+                  <img 
+                    src={imageUrl} 
+                    alt="Generated artwork" 
+                    className="w-full h-auto rounded-lg"
+                  />
+                </div>
               </div>
             )}
 

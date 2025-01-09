@@ -1,38 +1,38 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Music2, Settings, User, LogOut, Home, Wand2 } from 'lucide-react';
+import { Music2, Settings, User, LogOut, Radio, Users } from 'lucide-react';
 import { useState } from 'react';
 
 const Layout = ({ currentUser, handleLogout }) => {
   return (
     <div className="fixed left-0 top-0 h-[calc(100vh-5rem)] w-[19rem] border-r border-white/10">
       <div className="flex flex-col h-full p-5">
-        <Link to="/" className="text-2xl font-bold text-[#F2E6D8] mb-8">
+        <Link to="/generate" className="text-2xl font-bold text-[#F2E6D8] mb-8">
           LLM Synth
         </Link>
         
         <nav className="flex-1">
           <div className="space-y-1">
             <Link 
-              to="/" 
-              className="flex items-center gap-3 px-4 py-3 text-[#F2E6D8] rounded-xl hover:bg-white/5 transition-colors"
-            >
-              <Home className="h-5 w-5" />
-              <span className="text-lg">Home</span>
-            </Link>
-
-            <Link 
               to="/generate" 
               className="flex items-center gap-3 px-4 py-3 text-[#F2E6D8] rounded-xl hover:bg-white/5 transition-colors"
             >
-              <Wand2 className="h-5 w-5" />
+              <Music2 className="h-5 w-5" />
               <span className="text-lg">Generate Music</span>
+            </Link>
+
+            <Link 
+              to="/" 
+              className="flex items-center gap-3 px-4 py-3 text-[#F2E6D8] rounded-xl hover:bg-white/5 transition-colors"
+            >
+              <Users className="h-5 w-5" />
+              <span className="text-lg">Community</span>
             </Link>
 
             <Link 
               to="/synthesize" 
               className="flex items-center gap-3 px-4 py-3 text-[#F2E6D8] rounded-xl hover:bg-white/5 transition-colors"
             >
-              <Music2 className="h-5 w-5" />
+              <Radio className="h-5 w-5" />
               <span className="text-lg">Synthesizer</span>
             </Link>
 

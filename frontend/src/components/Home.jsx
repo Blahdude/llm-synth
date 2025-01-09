@@ -171,51 +171,49 @@ const Home = () => {
               Community Generations
             </h2>
 
-            <div className="space-y-3">
+            <div className="space-y-2">
               {allGenerations.map((generation) => (
                 <div 
                   key={generation.id} 
-                  className="p-4 rounded-lg border border-white/10 bg-white/5 hover:bg-white/[0.07] transition-all cursor-pointer"
+                  className="p-3 rounded-lg border border-white/10 bg-white/5 hover:bg-white/[0.07] transition-all cursor-pointer"
                   onClick={() => handlePlay(generation)}
                 >
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-3">
-                      <div className="px-2 py-1 rounded-md bg-white/10 text-xs text-[#F2E6D8]/60">
-                        {generation.duration}s
+                  <div className="flex items-center gap-4">
+                    {generation.imageUrl && (
+                      <div className="w-16 h-16 flex-shrink-0 rounded-md overflow-hidden bg-black/20">
+                        <img 
+                          src={generation.imageUrl} 
+                          alt="Generated artwork"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    )}
+
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-[#F2E6D8] font-medium line-clamp-1 mb-1">
+                        {generation.prompt}
+                      </p>
+
+                      <div className="flex items-center gap-2 text-xs text-[#F2E6D8]/60">
+                        <span>{generation.duration}s</span>
+                        <span className="text-[#F2E6D8]/40">•</span>
+                        <span className="text-[#F2E6D8]/40">
+                          {generation.model?.split('/')[1] || 'Unknown'}
+                        </span>
                       </div>
                     </div>
 
-                    <p className="text-sm text-[#F2E6D8] line-clamp-2">
-                      {generation.prompt}
-                    </p>
-
-                    <div className="pt-2 border-t border-white/5 space-y-1.5">
-                      <div className="flex items-center gap-2 text-xs text-[#F2E6D8]/60">
+                    <div className="flex items-center gap-4 text-xs text-[#F2E6D8]/40">
+                      <span className="flex items-center gap-1">
                         <User className="h-3 w-3" />
                         {generation.username || 'Anonymous'}
-                      </div>
-                      
-                      <div className="flex items-center justify-between text-xs text-[#F2E6D8]/40">
-                        <div className="flex items-center gap-2">
-                          <span>{generation.model?.split('/')[1] || 'Unknown'}</span>
-                        </div>
-                        <span>{generation.timestamp?.toDate().toLocaleString()}</span>
-                      </div>
+                      </span>
+                      <span>{generation.timestamp?.toDate().toLocaleString()}</span>
                     </div>
                   </div>
                 </div>
               ))}
             </div>
-          </div>
-        </div>
-
-        <div className="fixed right-0 mr-[3rem] top-0 h-[calc(100vh-5rem)]">
-          <div className="h-full pt-5 px-5 pb-24">
-            <GenerationsSidebar 
-              generations={generations}
-              onDelete={deleteGeneration}
-              onUseSynthesizer={handleUseSynthesizer}
-            />
           </div>
         </div>
       </div>
